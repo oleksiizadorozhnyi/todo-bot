@@ -1,9 +1,19 @@
 package todo_bot
 
+import "telegramBot/pkg/model/task/status"
+
 type Storage interface {
-	SaveTask() string
-	GetListOfTasks() string
-	DeleteTask() string
+	SetUserState(userID int64, state int) error
+	GetUserState(userID int64) (int, error)
+	CreateNewTask(userID int64) (taskID int64, err error)
+	SetTaskName(taskID int64, taskName string) (err error)
+	GetTaskName(taskID int64) (string, error)
+	SetTaskDescription(taskID int64, taskDescription string) error
+	GetTaskDescription(taskID int64) (string, error)
+	SetTaskStatus(taskID int64, taskStatus int) error
+	GetTaskIDInCreationStatus(userID int64) (int64, error)
+	DeleteTask(taskName string) error
+	GetListOfTasks() (string, error)
 }
 
 type TodoBot struct {
@@ -16,14 +26,58 @@ func New(database Storage) *TodoBot {
 	}
 }
 
-func (t *TodoBot) NewTask() string {
-	return t.storage.SaveTask()
+func (s *TodoBot) SetUserState(userID int64, state int) error {
+	return s.storage.SetUserState(userID, state)
 }
 
-func (t *TodoBot) ListOfTasks() string {
-	return t.storage.GetListOfTasks()
+func (s *TodoBot) GetUserState(userID int64) (int, error) {
+	return s.storage.GetUserState(userID)
 }
 
-func (t *TodoBot) DeleteTask() string {
-	return t.storage.DeleteTask()
+func (s *TodoBot) CreateNewTask(userID int64) (taskID int64, err error) {
+	taskID, err = s.storage.CreateNewTask(userID)
+	if err != nil {
+		return 0, err
+	}
+	err = s.storage.SetTaskStatus(userID, status.Creating)
+	if err != nil {
+		return 0, err
+	}
+	return taskID, nil
+}
+
+func (s *TodoBot) SetTaskName(taskID int64, taskName string) (err error) {
+	return s.storage.SetTaskName(taskID, taskName)
+}
+
+func (s *TodoBot) GetTaskName(taskID int64) (string, error) {
+	return s.storage.GetTaskName(taskID)
+}
+
+func (s *TodoBot) SetTaskDescription(taskID int64, taskDescription string) error {
+	err := s.storage.SetTaskDescription(taskID, taskDescription)
+	if err != nil {
+		return err
+	}
+	err = s.storage.SetTaskStatus(taskID, status.Created)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *TodoBot) GetTaskDescription(taskID int64) (string, error) {
+	return s.storage.GetTaskDescription(taskID)
+}
+
+func (s *TodoBot) GetTaskIDInCreationStatus(userID int64) (int64, error) {
+	return s.storage.GetTaskIDInCreationStatus(userID)
+}
+
+func (s *TodoBot) DeleteTask(taskName string) error {
+	return s.storage.DeleteTask(taskName)
+}
+
+func (s *TodoBot) GetListOfTasks() (string, error) {
+	return s.storage.GetListOfTasks()
 }

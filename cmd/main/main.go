@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/caarlos0/env/v8"
+	"go.uber.org/zap"
 	"log"
 	"telegramBot/internal/config"
 	"telegramBot/pkg/adapter/storage"
@@ -10,15 +11,22 @@ import (
 )
 
 func main() {
+	l, err := zap.NewProduction()
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger := l.Sugar()
+	defer l.Sync()
+
 	cfg := config.Config{}
 	if err := env.Parse(&cfg); err != nil {
-		panic(err)
+		logger.Fatal(err)
 	}
 	database := storage.New()
 	logic := todo_bot.New(database)
 	bot := telegramApi.New(logic, cfg.Token)
-	err := bot.Start()
+	err = bot.Run()
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 }
