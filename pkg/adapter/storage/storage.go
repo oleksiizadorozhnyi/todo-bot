@@ -5,8 +5,9 @@ import (
 	"errors"
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
-	"log"
+	"go.uber.org/zap"
 	"telegramBot/pkg/model/task"
+	"telegramBot/pkg/model/task/status"
 )
 
 type Storage struct {
@@ -16,7 +17,7 @@ type Storage struct {
 func New() *Storage {
 	db, err := sql.Open("sqlite3", "./database.db")
 	if err != nil {
-		log.Fatal(err)
+		zap.L().Fatal("New() -> sql.Open()", zap.Error(err))
 	}
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
@@ -27,15 +28,14 @@ func New() *Storage {
         taskStatus INTEGER
     )`)
 	if err != nil {
-		log.Fatal(err)
+		zap.L().Fatal("New() -> sql.Open()", zap.Error(err))
 	}
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userID INTEGER,
+        id INTEGER PRIMARY KEY ,
         state INTEGER
     )`)
 	if err != nil {
-		log.Fatal(err)
+		zap.L().Fatal("New() -> sql.Open()", zap.Error(err))
 	}
 	return &Storage{
 		database: db,
@@ -44,18 +44,18 @@ func New() *Storage {
 
 func (s *Storage) SetUserState(userID int64, state int) error {
 	var count int
-	err := s.database.QueryRow("SELECT COUNT(*) FROM users WHERE userID = ?", userID).Scan(&count)
+	err := s.database.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", userID).Scan(&count)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Storage.go -> SetUserState() -> s.database.QueryRow() %s", err.Error()))
 	}
 
 	if count > 0 {
-		_, err = s.database.Exec("UPDATE users SET state = ? WHERE userID = ?", state, userID)
+		_, err = s.database.Exec("UPDATE users SET state = ? WHERE id = ?", state, userID)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Storage.go -> SetUserState() -> s.database.Exec() %s", err.Error()))
 		}
 	} else {
-		_, err := s.database.Exec("INSERT INTO users (userID, state) VALUES (?, ?)", userID, state)
+		_, err := s.database.Exec("INSERT INTO users (id, state) VALUES (?, ?)", userID, state)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Storage.go -> SetUserState() -> s.database.Exec() %s", err.Error()))
 		}
@@ -64,7 +64,7 @@ func (s *Storage) SetUserState(userID int64, state int) error {
 }
 
 func (s *Storage) GetUserState(userID int64) (int, error) {
-	rows, err := s.database.Query("SELECT state FROM users WHERE userID = ?", userID)
+	rows, err := s.database.Query("SELECT state FROM users WHERE id = ?", userID)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf("Storage.go -> GetUserState() -> s.database.Query() %s", err.Error()))
 	}
@@ -101,7 +101,7 @@ func (s *Storage) SetTaskName(taskID int64, taskName string) (err error) {
 }
 
 func (s *Storage) GetTaskName(taskID int64) (string, error) {
-	rows, err := s.database.Query("SELECT taskName FROM tasks WHERE taskID = ?", taskID)
+	rows, err := s.database.Query("SELECT taskName FROM tasks WHERE id = ?", taskID)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("Storage.go -> GetTaskName() -> s.database.Query() %s", err.Error()))
 	}
@@ -125,7 +125,7 @@ func (s *Storage) SetTaskDescription(taskID int64, taskDescription string) error
 }
 
 func (s *Storage) GetTaskDescription(taskID int64) (string, error) {
-	rows, err := s.database.Query("SELECT taskDescription FROM tasks WHERE taskID = ?", taskID)
+	rows, err := s.database.Query("SELECT taskDescription FROM tasks WHERE id = ?", taskID)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("Storage.go -> GetTaskDescription() -> s.database.Query() %s",
 			err.Error()))
@@ -150,7 +150,7 @@ func (s *Storage) SetTaskStatus(taskID int64, taskStatus int) error {
 }
 
 func (s *Storage) GetTaskIDInCreationStatus(userID int64) (int64, error) {
-	rows, err := s.database.Query("SELECT id FROM tasks WHERE userID = ?", userID)
+	rows, err := s.database.Query("SELECT id FROM tasks WHERE userID = ? AND taskStatus = ?", userID, status.Creating)
 	if err != nil {
 		return 0, errors.New(fmt.Sprintf("Storage.go -> GetTaskIDInCreationStatus() -> s.database.Query() %s",
 			err.Error()))
@@ -167,19 +167,36 @@ func (s *Storage) GetTaskIDInCreationStatus(userID int64) (int64, error) {
 	return taskID, nil
 }
 
-func (s *Storage) DeleteTask(taskName string) error {
-	_, err := s.database.Exec("DELETE FROM tasks WHERE taskName = ?", taskName)
+func (s *Storage) DeleteTask(taskName string) (string, error) {
+	var count int
+	err := s.database.QueryRow("SELECT COUNT(*) FROM tasks WHERE taskName = ?", taskName).Scan(&count)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Storage.go -> DeleteTask() -> s.database.Exec() %s",
+		return "", errors.New(fmt.Sprintf("Storage.go -> DeleteTask() -> s.database.QueryRow() %s", err.Error()))
+	}
+	if count == 0 {
+		return "There is no such Task", nil
+	}
+	_, err = s.database.Exec("DELETE FROM tasks WHERE taskName = ?", taskName)
+	if err != nil {
+		return "", errors.New(fmt.Sprintf("Storage.go -> DeleteTask() -> s.database.Exec() %s",
+			err.Error()))
+	}
+	return "Task deleted successfully", nil
+}
+
+func (s *Storage) DeleteNotFinishedTask() error {
+	_, err := s.database.Exec("DELETE FROM tasks WHERE taskStatus = ?", 0)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Storage.go -> DeleteNotFinishedTask() -> s.database.Exec() %s",
 			err.Error()))
 	}
 	return nil
 }
 
-func (s *Storage) GetListOfTasks() (string, error) {
+func (s *Storage) GetListOfTasks(userID int64) (string, error) {
 	var tasks []string
 
-	rows, err := s.database.Query("SELECT taskName, taskDescription FROM tasks")
+	rows, err := s.database.Query("SELECT taskName, taskDescription FROM tasks WHERE userID = ?", userID)
 	if err != nil {
 		return "", errors.New(fmt.Sprintf("GetListOfTasks() -> s.database.Query() %s", err.Error()))
 	}

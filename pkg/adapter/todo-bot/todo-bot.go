@@ -12,8 +12,9 @@ type Storage interface {
 	GetTaskDescription(taskID int64) (string, error)
 	SetTaskStatus(taskID int64, taskStatus int) error
 	GetTaskIDInCreationStatus(userID int64) (int64, error)
-	DeleteTask(taskName string) error
-	GetListOfTasks() (string, error)
+	DeleteTask(taskName string) (string, error)
+	DeleteNotFinishedTask() error
+	GetListOfTasks(userID int64) (string, error)
 }
 
 type TodoBot struct {
@@ -39,7 +40,7 @@ func (s *TodoBot) CreateNewTask(userID int64) (taskID int64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	err = s.storage.SetTaskStatus(userID, status.Creating)
+	err = s.storage.SetTaskStatus(taskID, status.Creating)
 	if err != nil {
 		return 0, err
 	}
@@ -74,10 +75,18 @@ func (s *TodoBot) GetTaskIDInCreationStatus(userID int64) (int64, error) {
 	return s.storage.GetTaskIDInCreationStatus(userID)
 }
 
-func (s *TodoBot) DeleteTask(taskName string) error {
+func (s *TodoBot) DeleteTask(taskName string) (string, error) {
 	return s.storage.DeleteTask(taskName)
 }
 
-func (s *TodoBot) GetListOfTasks() (string, error) {
-	return s.storage.GetListOfTasks()
+func (s *TodoBot) DeleteNotFinishedTask() error {
+	return s.storage.DeleteNotFinishedTask()
+}
+
+func (s *TodoBot) GetListOfTasks(userID int64) (string, error) {
+	return s.storage.GetListOfTasks(userID)
+}
+
+func (s *TodoBot) SetTaskStatus(taskID int64, taskStatus int) error {
+	return s.storage.SetTaskStatus(taskID, taskStatus)
 }
