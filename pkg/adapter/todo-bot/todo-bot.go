@@ -1,6 +1,9 @@
 package todo_bot
 
-import "telegramBot/pkg/model/task/status"
+import (
+	"telegramBot/pkg/model/task"
+	"telegramBot/pkg/model/task/status"
+)
 
 type Storage interface {
 	SetUserState(userID int64, state int) error
@@ -14,7 +17,7 @@ type Storage interface {
 	GetTaskIDInCreationStatus(userID int64) (int64, error)
 	DeleteTask(taskName string) (string, error)
 	DeleteNotFinishedTask() error
-	GetListOfTasks(userID int64) (string, error)
+	GetListOfTasks(userID int64) ([]task.Task, error)
 }
 
 type TodoBot struct {
@@ -83,7 +86,7 @@ func (s *TodoBot) DeleteNotFinishedTask() error {
 	return s.storage.DeleteNotFinishedTask()
 }
 
-func (s *TodoBot) GetListOfTasks(userID int64) (string, error) {
+func (s *TodoBot) GetListOfTasks(userID int64) ([]task.Task, error) {
 	return s.storage.GetListOfTasks(userID)
 }
 
