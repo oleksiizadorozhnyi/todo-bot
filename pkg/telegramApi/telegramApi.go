@@ -176,6 +176,12 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
+				case "/cancelLastAction":
+					_, _ = t.bot.SendMessage(tu.Message(tu.ID(chatID), "There is nothing to cancel"))
+					if err != nil {
+						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
+						continue
+					}
 				default:
 
 					inlineKeyboard := tu.InlineKeyboard(
