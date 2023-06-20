@@ -184,8 +184,8 @@ func (s *Storage) DeleteTask(taskName string) (string, error) {
 	return "Task deleted successfully", nil
 }
 
-func (s *Storage) DeleteNotFinishedTask() error {
-	_, err := s.database.Exec("DELETE FROM tasks WHERE taskStatus = ?", 0)
+func (s *Storage) DeleteNotFinishedTask(chatId int64) error {
+	_, err := s.database.Exec("DELETE FROM tasks WHERE taskStatus = ? AND userID = ?", 0, chatId)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Storage.go -> DeleteNotFinishedTask() -> s.database.Exec() %s",
 			err.Error()))

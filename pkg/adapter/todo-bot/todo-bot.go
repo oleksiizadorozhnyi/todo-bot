@@ -16,7 +16,7 @@ type Storage interface {
 	SetTaskStatus(taskID int64, taskStatus int) error
 	GetTaskIDInCreationStatus(userID int64) (int64, error)
 	DeleteTask(taskName string) (string, error)
-	DeleteNotFinishedTask() error
+	DeleteNotFinishedTask(chatId int64) error
 	GetListOfTasks(userID int64) ([]task.Task, error)
 }
 
@@ -82,8 +82,8 @@ func (s *TodoBot) DeleteTask(taskName string) (string, error) {
 	return s.storage.DeleteTask(taskName)
 }
 
-func (s *TodoBot) DeleteNotFinishedTask() error {
-	return s.storage.DeleteNotFinishedTask()
+func (s *TodoBot) DeleteNotFinishedTask(chatId int64) error {
+	return s.storage.DeleteNotFinishedTask(chatId)
 }
 
 func (s *TodoBot) GetListOfTasks(userID int64) ([]task.Task, error) {

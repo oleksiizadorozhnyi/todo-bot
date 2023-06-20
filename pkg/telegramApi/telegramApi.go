@@ -6,6 +6,7 @@ import (
 	tu "github.com/mymmrac/telego/telegoutil"
 	"go.uber.org/zap"
 	"os"
+	"telegramBot/pkg/adapter/storage/messageIdStorage"
 	todo_bot "telegramBot/pkg/adapter/todo-bot"
 	"telegramBot/pkg/model/state"
 )
@@ -45,17 +46,20 @@ func (t *TelegramApi) Run() error {
 		} else if update.Message != nil {
 			action = update.Message.Text
 			chatID = update.Message.Chat.ID
+			messageIdStorage.Set(chatID, update.Message.MessageID)
 		}
 
 		if action != "" {
-			if len(action) > 11 {
-				if action[:11] == "/deleteTask" {
+			button := false
+			if len(action) > 17 {
+				if action[:17] == "/buttonDeleteTask" {
 					err := t.todoBot.SetUserState(chatID, state.WaitingForTaskNameToBeDeleted)
 					if err != nil {
 						zap.L().Error("Run() -> /newTask -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
-					action = action[11:]
+					action = action[17:]
+					button = true
 				}
 			}
 
@@ -65,18 +69,19 @@ func (t *TelegramApi) Run() error {
 				continue
 			}
 
-			//if chatID == 287757469 {
-			//	_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID), "Nikisha sosi pisun"))
-			//	if err != nil {
-			//		zap.L().Error("Run() -> /deleteTask -> t.bot.SendMessage()", zap.Error(err))
-			//		continue
-			//	}
-			//	continue
-			//}
 			switch userState {
 			case state.Default:
 				switch action {
+				case "/start":
+					t.deleteMessages(chatID)
+					_, err := t.bot.SendMessage(tu.Messagef(tu.ID(chatID), "Hello %s!", update.Message.Chat.FirstName))
+					if err != nil {
+						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
+						continue
+					}
+					t.menu(chatID)
 				case "/newTask":
+					t.deleteMessages(chatID)
 					err = t.todoBot.SetUserState(chatID, state.WaitingForNewTaskName)
 					if err != nil {
 						zap.L().Error("Run() -> /newTask -> t.todoBot.SetUserState()", zap.Error(err))
@@ -99,12 +104,14 @@ func (t *TelegramApi) Run() error {
 						"Send task name",
 					).WithReplyMarkup(inlineKeyboard)
 
-					_, _ = t.bot.SendMessage(message)
+					messageInfo, _ := t.bot.SendMessage(message)
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 				case "/deleteTask":
+					t.deleteMessages(chatID)
 					err = t.todoBot.SetUserState(chatID, state.WaitingForTaskNameToBeDeleted)
 					if err != nil {
 						zap.L().Error("Run() -> /deleteTask -> t.todoBot.SetUserState()", zap.Error(err))
@@ -121,96 +128,36 @@ func (t *TelegramApi) Run() error {
 						"Send task name",
 					).WithReplyMarkup(inlineKeyboard)
 
-					_, _ = t.bot.SendMessage(message)
+					messageInfo, _ := t.bot.SendMessage(message)
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 				case "/listOfTasks":
-					tasks, err := t.todoBot.GetListOfTasks(chatID)
-					if err != nil {
-						zap.L().Error("Run() -> /listOfTasks -> t.todoBot.GetListOfTasks()", zap.Error(err))
-						continue
-					}
-					for _, task := range tasks {
-						inlineKeyboard := tu.InlineKeyboard(
-							tu.InlineKeyboardRow(
-								tu.InlineKeyboardButton("Delete this task").
-									WithCallbackData("/deleteTask" + task.TaskName),
-							),
-						)
-						message := tu.Messagef(
-							tu.ID(chatID),
-							`Task name:             %s
-Task description:   %s`, task.TaskName, task.TaskDescription,
-						).WithReplyMarkup(inlineKeyboard)
-
-						_, _ = t.bot.SendMessage(message)
-						if err != nil {
-							zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
-							continue
-						}
-					}
-				case "/allButtons":
-					inlineKeyboard := tu.InlineKeyboard(
-						tu.InlineKeyboardRow(
-							tu.InlineKeyboardButton("Make new task").
-								WithCallbackData("/newTask"),
-							tu.InlineKeyboardButton("All my tasks").
-								WithCallbackData("/listOfTasks"),
-						),
-						tu.InlineKeyboardRow(
-							tu.InlineKeyboardButton("Delete task").
-								WithCallbackData("/deleteTask"),
-							tu.InlineKeyboardButton("All my tasks").
-								WithCallbackData("/listOfTasks"),
-						),
-					)
-					message := tu.Message(
-						tu.ID(chatID),
-						"All I can do now:",
-					).WithReplyMarkup(inlineKeyboard)
-
-					_, _ = t.bot.SendMessage(message)
-					if err != nil {
-						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
-						continue
-					}
+					t.deleteMessages(chatID)
+					t.getListOfTasks(chatID)
+					t.menu(chatID)
 				case "/cancelLastAction":
-					_, _ = t.bot.SendMessage(tu.Message(tu.ID(chatID), "There is nothing to cancel"))
+					messageInfo, _ := t.bot.SendMessage(tu.Message(tu.ID(chatID), "There is nothing to cancel"))
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 				default:
-
-					inlineKeyboard := tu.InlineKeyboard(
-						tu.InlineKeyboardRow( // Row 1
-							tu.InlineKeyboardButton("See all commands").
-								WithCallbackData("/allButtons"),
-						),
-					)
-
-					message := tu.Messagef(
-						tu.ID(chatID),
-						"Hello %s! Use buttons below", update.Message.From.FirstName,
-					).WithReplyMarkup(inlineKeyboard)
-
-					_, _ = t.bot.SendMessage(message)
-					if err != nil {
-						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
-						continue
-					}
-
+					t.deleteMessages(chatID)
+					t.menu(chatID)
 				}
 			case state.WaitingForTaskNameToBeDeleted:
 				if action == "/newTask" || action == "/allButtons" ||
-					action == "/listOfTasks" || action == "/deleteTask" {
-					_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID),
+					action == "/listOfTasks" || action == "/deleteTask" || action == "/start" {
+					messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID),
 						"Finish your last action or /cancelLastAction"))
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				} else if action == "/cancelLastAction" {
 					err = t.todoBot.SetUserState(chatID, state.Default)
@@ -218,33 +165,41 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
+					t.deleteMessages(chatID)
 
-					_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
+					messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
 					if err != nil {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
+				t.deleteMessages(chatID)
+
 				message, err := t.todoBot.DeleteTask(action)
 				if err != nil {
 					zap.L().Error("Run() -> t.todoBot.DeleteTask()", zap.Error(err))
 					continue
 				}
+				if button {
+					t.getListOfTasks(chatID)
+				}
 
-				_, err = t.bot.SendMessage(
+				messageInfo, err := t.bot.SendMessage(
 					tu.Message(tu.ID(chatID), message))
 				if err != nil {
 					zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 					continue
 				}
+				messageIdStorage.Set(chatID, messageInfo.MessageID)
 
 				err = t.todoBot.SetUserState(chatID, state.Default)
 				if err != nil {
 					zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 					continue
 				}
-
+				t.menu(chatID)
 			case state.WaitingForNewTaskName:
 				if action == "/cancelLastAction" {
 					err = t.todoBot.SetUserState(chatID, state.Default)
@@ -252,26 +207,30 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
-					err = t.todoBot.DeleteNotFinishedTask()
+					err = t.todoBot.DeleteNotFinishedTask(chatID)
 					if err != nil {
 						zap.L().Error("Run() -> t.todoBot.DeleteNotFinishedTask()", zap.Error(err))
 						continue
 					}
+					t.deleteMessages(chatID)
 
-					_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
+					messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
 					if err != nil {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.menu(chatID)
 					continue
 				}
 				if action == "/newTask" ||
 					action == "/allButtons" || action == "/listOfTasks" ||
-					action == "/deleteTask" {
-					_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID), "Finish your last action or /cancelLastAction"))
+					action == "/deleteTask" || action == "/start" {
+					messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID), "Finish your last action or /cancelLastAction"))
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
 				taskID, err := t.todoBot.GetTaskIDInCreationStatus(chatID)
@@ -298,11 +257,12 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 					"Send task description",
 				).WithReplyMarkup(inlineKeyboard)
 
-				_, _ = t.bot.SendMessage(message)
+				messageInfo, _ := t.bot.SendMessage(message)
 				if err != nil {
 					zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					continue
 				}
+				messageIdStorage.Set(chatID, messageInfo.MessageID)
 
 			case state.WaitingForNewTaskDescription:
 				if action == "/cancelLastAction" {
@@ -312,22 +272,29 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 						continue
 					}
 
-					err = t.todoBot.DeleteNotFinishedTask()
+					err = t.todoBot.DeleteNotFinishedTask(chatID)
 					if err != nil {
 						zap.L().Error("Run() -> t.todoBot.DeleteNotFinishedTask()", zap.Error(err))
 						continue
 					}
+					t.deleteMessages(chatID)
 
-					_, err = t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
+					messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID), "Last action canceled"))
 					if err != nil {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
+						continue
+					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.menu(chatID)
+					if err != nil {
+						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
 					continue
 				}
 				if action == "/newTask" || action == "/allButtons" || action == "/listOfTasks" ||
-					action == "/deleteTask" {
-					_, err = t.bot.SendMessage(
+					action == "/deleteTask" || action == "/start" {
+					messageInfo, err := t.bot.SendMessage(
 						tu.Message(
 							tu.ID(chatID),
 							"Finish your last action or /cancelLastAction",
@@ -336,8 +303,10 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
+					messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
+				t.deleteMessages(chatID)
 				taskID, err := t.todoBot.GetTaskIDInCreationStatus(chatID)
 				if err != nil {
 					zap.L().Error("Run() -> t.todoBot.GetTaskIDInCreationStatus()", zap.Error(err))
@@ -356,7 +325,7 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 					continue
 				}
 
-				_, err = t.bot.SendMessage(
+				messageInfo, err := t.bot.SendMessage(
 					tu.Message(
 						tu.ID(chatID),
 						"Task created",
@@ -366,8 +335,74 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 					zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					continue
 				}
+				messageIdStorage.Set(chatID, messageInfo.MessageID)
+				t.menu(chatID)
 			}
 		}
 	}
 	return nil
+}
+
+func (t *TelegramApi) deleteMessages(chatID int64) {
+	messageIDs := messageIdStorage.Get(chatID)
+	fmt.Println(messageIDs)
+	for _, v := range messageIDs {
+		err := t.bot.DeleteMessage(&telego.DeleteMessageParams{ChatID: tu.ID(chatID), MessageID: v})
+		if err != nil {
+			fmt.Println(err)
+			zap.L().Error("deleteMessages()", zap.Error(err))
+		}
+	}
+}
+
+func (t *TelegramApi) getListOfTasks(chatID int64) {
+	tasks, err := t.todoBot.GetListOfTasks(chatID)
+	if err != nil {
+		zap.L().Error("Run() -> /listOfTasks -> t.todoBot.GetListOfTasks()", zap.Error(err))
+		return
+	}
+	for _, task := range tasks {
+		inlineKeyboard := tu.InlineKeyboard(
+			tu.InlineKeyboardRow(
+				tu.InlineKeyboardButton("Delete this task").
+					WithCallbackData("/buttonDeleteTask" + task.TaskName),
+			),
+		)
+		message := tu.Messagef(
+			tu.ID(chatID),
+			`Task name:             %s
+Task description:   %s`, task.TaskName, task.TaskDescription,
+		).WithReplyMarkup(inlineKeyboard)
+
+		messageInfo, _ := t.bot.SendMessage(message)
+		if err != nil {
+			zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
+			return
+		}
+		messageIdStorage.Set(chatID, messageInfo.MessageID)
+	}
+	return
+}
+
+func (t *TelegramApi) menu(chatID int64) {
+	keyboard := tu.Keyboard(
+		tu.KeyboardRow(
+			tu.KeyboardButton("/newTask"),
+			tu.KeyboardButton("/listOfTasks"),
+		),
+		tu.KeyboardRow(
+			tu.KeyboardButton("/deleteTask"),
+		),
+	).WithResizeKeyboard().WithInputFieldPlaceholder("Select something").
+		WithOneTimeKeyboard()
+	message := tu.Message(
+		tu.ID(chatID),
+		"Menu: ",
+	).WithReplyMarkup(keyboard)
+	messageInfo, err := t.bot.SendMessage(message)
+	if err != nil {
+		zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
+		return
+	}
+	messageIdStorage.Set(chatID, messageInfo.MessageID)
 }
