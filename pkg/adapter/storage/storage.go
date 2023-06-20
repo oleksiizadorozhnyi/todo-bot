@@ -184,8 +184,8 @@ func (s *Storage) DeleteTask(taskName string) (string, error) {
 	return "Task deleted successfully", nil
 }
 
-func (s *Storage) DeleteNotFinishedTask() error {
-	_, err := s.database.Exec("DELETE FROM tasks WHERE taskStatus = ?", 0)
+func (s *Storage) DeleteNotFinishedTask(chatId int64) error {
+	_, err := s.database.Exec("DELETE FROM tasks WHERE taskStatus = ? AND userID = ?", 0, chatId)
 	if err != nil {
 		return errors.New(fmt.Sprintf("Storage.go -> DeleteNotFinishedTask() -> s.database.Exec() %s",
 			err.Error()))
@@ -193,21 +193,21 @@ func (s *Storage) DeleteNotFinishedTask() error {
 	return nil
 }
 
-func (s *Storage) GetListOfTasks(userID int64) (string, error) {
-	var tasks []string
+func (s *Storage) GetListOfTasks(userID int64) ([]task.Task, error) {
+	var tasks []task.Task
 
 	rows, err := s.database.Query("SELECT taskName, taskDescription FROM tasks WHERE userID = ?", userID)
 	if err != nil {
-		return "", errors.New(fmt.Sprintf("GetListOfTasks() -> s.database.Query() %s", err.Error()))
+		return []task.Task{}, errors.New(fmt.Sprintf("GetListOfTasks() -> s.database.Query() %s", err.Error()))
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var taskold task.Task
 		if err := rows.Scan(&taskold.TaskName, &taskold.TaskDescription); err != nil {
-			return "", errors.New(fmt.Sprintf("GetListOfTasks() -> rows.Scan() %s", err.Error()))
+			return []task.Task{}, errors.New(fmt.Sprintf("GetListOfTasks() -> rows.Scan() %s", err.Error()))
 		}
-		tasks = append(tasks, "\n\nTask:\n{", taskold.TaskName, ": ", taskold.TaskDescription, " }\n\n")
+		tasks = append(tasks, taskold)
 	}
-	return fmt.Sprintf("List of your task: %v", tasks), nil
+	return tasks, nil
 }
