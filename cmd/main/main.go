@@ -6,6 +6,7 @@ import (
 	"log"
 	"telegramBot/internal/config"
 	"telegramBot/pkg/adapter/storage"
+	"telegramBot/pkg/adapter/storage/messageIdStorage"
 	"telegramBot/pkg/adapter/todo-bot"
 	"telegramBot/pkg/telegramApi"
 )
@@ -25,6 +26,9 @@ func main() {
 	database := storage.New()
 	logic := todo_bot.New(database)
 	bot := telegramApi.New(logic, cfg.Token)
+	redis := messageIdStorage.New()
+	redis.RestoreDataFromRedis()
+	defer redis.SaveDataToRedis()
 	err = bot.Run()
 	if err != nil {
 		logger.Fatal(err)
