@@ -25,10 +25,8 @@ func main() {
 	}
 	database := storage.New()
 	logic := todo_bot.New(database)
-	bot := telegramApi.New(logic, cfg.Token)
 	redis := messageIdStorage.New()
-	redis.RestoreDataFromRedis()
-	defer redis.SaveDataToRedis()
+	bot := telegramApi.New(logic, cfg.Token, redis)
 	err = bot.Run()
 	if err != nil {
 		logger.Fatal(err)

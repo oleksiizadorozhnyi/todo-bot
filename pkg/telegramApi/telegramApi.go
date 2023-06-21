@@ -12,11 +12,12 @@ import (
 )
 
 type TelegramApi struct {
-	bot     *telego.Bot
-	todoBot *todo_bot.TodoBot
+	bot              *telego.Bot
+	todoBot          *todo_bot.TodoBot
+	messageIdStorage *messageIdStorage.MessageIdStorage
 }
 
-func New(todoBot *todo_bot.TodoBot, token string) *TelegramApi {
+func New(todoBot *todo_bot.TodoBot, token string, messageIdStorage *messageIdStorage.MessageIdStorage) *TelegramApi {
 	bot, err := telego.NewBot(token, telego.WithDefaultDebugLogger())
 	if err != nil {
 		zap.L().Error("New() -> telego.NewBot()", zap.Error(err))
@@ -28,8 +29,9 @@ func New(todoBot *todo_bot.TodoBot, token string) *TelegramApi {
 	}
 	fmt.Printf("Bot user: %+v\n", botUser)
 	return &TelegramApi{
-		bot:     bot,
-		todoBot: todoBot,
+		bot:              bot,
+		todoBot:          todoBot,
+		messageIdStorage: messageIdStorage,
 	}
 }
 
@@ -46,7 +48,7 @@ func (t *TelegramApi) Run() error {
 		} else if update.Message != nil {
 			action = update.Message.Text
 			chatID = update.Message.Chat.ID
-			messageIdStorage.Set(chatID, update.Message.MessageID)
+			t.messageIdStorage.Set(chatID, update.Message.MessageID)
 		}
 
 		if action != "" {
@@ -109,7 +111,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 				case "/deleteTask":
 					t.deleteMessages(chatID)
 					err = t.todoBot.SetUserState(chatID, state.WaitingForTaskNameToBeDeleted)
@@ -133,7 +135,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 				case "/listOfTasks":
 					t.deleteMessages(chatID)
 					t.getListOfTasks(chatID)
@@ -144,7 +146,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 				default:
 					t.deleteMessages(chatID)
 					t.menu(chatID)
@@ -157,7 +159,7 @@ func (t *TelegramApi) Run() error {
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				} else if action == "/cancelLastAction" {
 					err = t.todoBot.SetUserState(chatID, state.Default)
@@ -172,7 +174,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
 				t.deleteMessages(chatID)
@@ -192,7 +194,7 @@ func (t *TelegramApi) Run() error {
 					zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 					continue
 				}
-				messageIdStorage.Set(chatID, messageInfo.MessageID)
+				t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 
 				err = t.todoBot.SetUserState(chatID, state.Default)
 				if err != nil {
@@ -219,7 +221,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					t.menu(chatID)
 					continue
 				}
@@ -230,7 +232,7 @@ func (t *TelegramApi) Run() error {
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
 				taskID, err := t.todoBot.GetTaskIDInCreationStatus(chatID)
@@ -262,7 +264,7 @@ func (t *TelegramApi) Run() error {
 					zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					continue
 				}
-				messageIdStorage.Set(chatID, messageInfo.MessageID)
+				t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 
 			case state.WaitingForNewTaskDescription:
 				if action == "/cancelLastAction" {
@@ -284,7 +286,7 @@ func (t *TelegramApi) Run() error {
 						zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
 						continue
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					t.menu(chatID)
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
@@ -303,7 +305,7 @@ func (t *TelegramApi) Run() error {
 					if err != nil {
 						zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					}
-					messageIdStorage.Set(chatID, messageInfo.MessageID)
+					t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 					continue
 				}
 				t.deleteMessages(chatID)
@@ -335,7 +337,7 @@ func (t *TelegramApi) Run() error {
 					zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 					continue
 				}
-				messageIdStorage.Set(chatID, messageInfo.MessageID)
+				t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 				t.menu(chatID)
 			}
 		}
@@ -344,7 +346,7 @@ func (t *TelegramApi) Run() error {
 }
 
 func (t *TelegramApi) deleteMessages(chatID int64) {
-	messageIDs := messageIdStorage.Get(chatID)
+	messageIDs := t.messageIdStorage.Get(chatID)
 	fmt.Println(messageIDs)
 	for _, v := range messageIDs {
 		err := t.bot.DeleteMessage(&telego.DeleteMessageParams{ChatID: tu.ID(chatID), MessageID: v})
@@ -379,7 +381,7 @@ Task description:   %s`, task.TaskName, task.TaskDescription,
 			zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 			return
 		}
-		messageIdStorage.Set(chatID, messageInfo.MessageID)
+		t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 	}
 	return
 }
@@ -404,5 +406,5 @@ func (t *TelegramApi) menu(chatID int64) {
 		zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 		return
 	}
-	messageIdStorage.Set(chatID, messageInfo.MessageID)
+	t.messageIdStorage.Set(chatID, messageInfo.MessageID)
 }

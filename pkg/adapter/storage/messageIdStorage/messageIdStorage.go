@@ -2,9 +2,10 @@ package messageIdStorage
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"strconv"
 )
 
 var ch = make(map[int64]chan int)
@@ -24,60 +25,41 @@ func New() *MessageIdStorage {
 	}
 }
 
-func (m *MessageIdStorage) SaveDataToRedis() {
-	for _, ch := range ch {
-		close(ch)
-	}
-	encodedData, err := json.Marshal(ch)
+func (m *MessageIdStorage) Set(chatID int64, messageID int) {
+	key := fmt.Sprintf("channel:%d", chatID)
+	err := m.client.RPush(context.Background(), key, strconv.Itoa(messageID)).Err()
 	if err != nil {
-		zap.L().Error("SaveDataToRedis()", zap.Error(err))
-		return
-	}
-	err = m.client.Set(context.Background(), "mydata", encodedData, 0).Err()
-	if err != nil {
-		zap.L().Error("SaveDataToRedis()", zap.Error(err))
+		zap.L().Error("Set()", zap.Error(err))
 		return
 	}
 	return
 }
 
-func (m *MessageIdStorage) RestoreDataFromRedis() {
-	val, err := m.client.Get(context.Background(), "mydata").Result()
+func (m *MessageIdStorage) Get(chatID int64) []int {
+	key := fmt.Sprintf("channel:%d", chatID)
+	exists, err := m.client.Exists(context.Background(), key).Result()
 	if err != nil {
-		if err == redis.Nil {
-			return
+		zap.L().Error("Set()", zap.Error(err))
+		return nil
+	}
+	if exists != 0 {
+		values, err := m.client.LRange(context.Background(), key, 0, -1).Result()
+		if err != nil {
+			zap.L().Error("Get()", zap.Error(err))
+			return nil
 		}
-		zap.L().Error(" RestoreDataFromRedis()", zap.Error(err))
-		return
-	}
-	err = json.Unmarshal([]byte(val), &ch)
-	if err != nil {
-		zap.L().Error(" RestoreDataFromRedis()", zap.Error(err))
-		return
-	}
-	return
-}
 
-func Set(chatID int64, messageID int) {
-	_, exists := ch[chatID]
-	if exists {
-		ch[chatID] <- messageID
+		result := make([]int, len(values))
+		for i, value := range values {
+			intValue, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				zap.L().Error("Get()", zap.Error(err))
+				return nil
+			}
+			result[i] = int(intValue)
+		}
+		return result
 	} else {
-		ch[chatID] = make(chan int, 100)
-		ch[chatID] <- messageID
+		return nil
 	}
-
-}
-
-func Get(chatID int64) []int {
-	_, exists := ch[chatID]
-	var messageIDs []int
-	if exists {
-		close(ch[chatID])
-		for i := range ch[chatID] {
-			messageIDs = append(messageIDs, i)
-		}
-		delete(ch, chatID)
-	}
-	return messageIDs
 }
