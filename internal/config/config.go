@@ -1,5 +1,7 @@
 package config
 
 type Config struct {
-	Token string `env:"TOKEN" envDefault:"6125726276:AAE7g-uWUgz6hlX8s7wgSus6wBh5CWVvyDE" `
+	Token         string `env:"TOKEN" `
+	AddrRedis     string `env:"ADDR_REDIS" envDefault:"localhost:6379"`
+	PasswordRedis string `env:"PASSWORD_REDIS" envDefault:""`
 }

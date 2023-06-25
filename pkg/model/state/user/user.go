@@ -1,4 +1,4 @@
-package state
+package user
 
 const (
 	Default = iota

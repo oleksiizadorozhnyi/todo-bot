@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"github.com/caarlos0/env/v8"
 	"go.uber.org/zap"
 	"log"
 	"telegramBot/internal/config"
-	"telegramBot/pkg/adapter/storage"
-	"telegramBot/pkg/adapter/todo-bot"
-	"telegramBot/pkg/telegramApi"
+	"telegramBot/pkg/adapter/api/telegram"
+	"telegramBot/pkg/adapter/cache/redis"
+	"telegramBot/pkg/adapter/storage/sqlite"
+	"telegramBot/pkg/adapter/todobot"
 )
 
 func main() {
@@ -22,10 +24,12 @@ func main() {
 	if err := env.Parse(&cfg); err != nil {
 		logger.Fatal(err)
 	}
-	database := storage.New()
-	logic := todo_bot.New(database)
-	bot := telegramApi.New(logic, cfg.Token)
-	err = bot.Run()
+	storage := sqlite.New()
+	logic := todobot.New(storage)
+	cache := redis.New(cfg)
+	bot := telegram.New(logic, cfg.Token, cache)
+	ctx := context.Background()
+	err = bot.Run(ctx)
 	if err != nil {
 		logger.Fatal(err)
 	}
