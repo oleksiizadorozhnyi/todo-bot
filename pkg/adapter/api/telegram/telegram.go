@@ -119,17 +119,17 @@ func (t *Telegram) Run(ctx context.Context) error {
 				}
 			}
 		case user.WaitingForTaskNameToBeDeleted:
-			if action == telegram.NewTaskState || action == "/allButtons" ||
+			if action == telegram.NewTaskState ||
 				action == telegram.ListOfTasksState || action == telegram.DeleteTaskState || action == telegram.StartState {
 				messageInfo, err := t.bot.SendMessage(tu.Message(tu.ID(chatID),
 					"Finish your last action or /cancelLastAction"))
 				if err != nil {
 					zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
+					continue
 				}
 				err = t.cache.Set(ctx, chatID, messageInfo.MessageID)
 				if err != nil {
 					zap.L().Error("Run() -> t.cache.Set()", zap.Error(err))
-					continue
 				}
 				continue
 			} else if action == telegram.CancelLastActionState {
@@ -178,7 +178,7 @@ func (t *Telegram) Run(ctx context.Context) error {
 			messageInfo, err := t.bot.SendMessage(
 				tu.Message(tu.ID(chatID), message))
 			if err != nil {
-				zap.L().Error("Run() -> t.todoBot.SetUserState()", zap.Error(err))
+				zap.L().Error("Run() -> t.bot.SendMessage()", zap.Error(err))
 				continue
 			}
 			err = t.cache.Set(ctx, chatID, messageInfo.MessageID)
@@ -316,7 +316,7 @@ func (t *Telegram) Run(ctx context.Context) error {
 				}
 				continue
 			}
-			if action == telegram.NewTaskState || action == "/allButtons" || action == telegram.ListOfTasksState ||
+			if action == telegram.NewTaskState || action == telegram.ListOfTasksState ||
 				action == telegram.DeleteTaskState || action == telegram.StartState {
 				messageInfo, err := t.bot.SendMessage(
 					tu.Message(
@@ -388,10 +388,9 @@ func (t *Telegram) deleteMessages(ctx context.Context, chatID int64) error {
 		return err
 	}
 	for _, v := range messageIDs {
-		zap.L().Info("Deleting message id:", zap.Int("message id", v))
 		err = t.bot.DeleteMessage(&telego.DeleteMessageParams{ChatID: tu.ID(chatID), MessageID: v})
 		if err != nil {
-			zap.L().Error("deleteMessages()", zap.Error(err))
+			return err
 		}
 	}
 	return nil
