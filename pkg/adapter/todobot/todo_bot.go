@@ -1,4 +1,4 @@
-package todo_bot
+package todobot
 
 import (
 	"telegramBot/pkg/model/task"
