@@ -19,7 +19,6 @@ func main() {
 	}
 	logger := l.Sugar()
 	defer l.Sync()
-
 	cfg := config.Config{}
 	if err := env.Parse(&cfg); err != nil {
 		logger.Fatal(err)
